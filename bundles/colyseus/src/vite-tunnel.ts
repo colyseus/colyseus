@@ -84,15 +84,21 @@ export function tunnelPlugin(setting: TunnelSetting | undefined, serverEntry: st
       const t = await load();
       if (t) { server.middlewares.use(guard(server.config.root, serverEntry, t.tunnelHostSuffix())); }
 
-      // Vite's CLI binds its shortcuts once it listens; ours go along.
+      // Vite's CLI binds its shortcuts once it listens; ours go along, hinted under its "h + enter".
       const bind = server.bindCLIShortcuts.bind(server);
-      server.bindCLIShortcuts = (options) => bind({
-        ...options,
-        customShortcuts: [
-          ...(options?.customShortcuts ?? []),
-          { key: 's', description: 'share on a public URL', action: share },
-        ],
-      });
+      server.bindCLIShortcuts = (options) => {
+        bind({
+          ...options,
+          customShortcuts: [
+            ...(options?.customShortcuts ?? []),
+            { key: 's', description: 'share on a public URL', action: share },
+          ],
+        });
+        // Vite binds them only on a TTY outside CI
+        if (options?.print && server.httpServer && process.stdin.isTTY && !process.env.CI) {
+          server.config.logger.info(paint(2, 22, paint(32, 39, '  ➜') + '  press ') + paint(1, 22, 's + enter') + paint(2, 22, ' to share on a public URL'));
+        }
+      };
 
       server.httpServer?.once('close', () => {
         const t = tunnel;
@@ -152,9 +158,10 @@ export function guard(root: string, serverEntry: string, hostSuffix: string) {
   };
 }
 
+const color = process.stdout.isTTY && !process.env.NO_COLOR;
+const paint = (code: number, reset: number, text: string) => color ? `\x1b[${code}m${text}\x1b[${reset}m` : text;
+
 function printShared(logger: Logger, t: TunnelModule, url: string) {
-  const color = process.stdout.isTTY && !process.env.NO_COLOR;
-  const paint = (code: number, reset: number, text: string) => color ? `\x1b[${code}m${text}\x1b[${reset}m` : text;
   const qr = t.qrCode(url).split('\n').map((line) => '  ' + line).join('\n');
   logger.info(`  ${paint(32, 39, '➜')}  ${paint(1, 22, 'Shared')}:  ${paint(36, 39, url + '/')}\n\n${qr}\n`);
 }

@@ -1,7 +1,7 @@
 import assert from "assert";
 import path from "path";
 
-import { guard } from "../src/vite-tunnel.ts";
+import { guard, tunnelPlugin } from "../src/vite-tunnel.ts";
 
 const ROOT = path.join(import.meta.dirname, "app");
 /** `/@fs` + an absolute path, as Vite writes it: `/@fs/C:/...` on Windows. */
@@ -43,6 +43,35 @@ describe("Vite plugin: tunnel", () => {
       assert.strictEqual(statusOf(url), "next", url);
     }
     assert.strictEqual(statusOf("/package.json", "localhost:5173"), "next");
+  });
+
+  it("adds s + enter, hinted under Vite's own hint", async () => {
+    const lines: string[] = [];
+    let bound: any;
+    const server: any = {
+      config: { root: ROOT, logger: { info: (line: string) => lines.push(line.replace(/\x1b\[\d+m/g, "")) } },
+      middlewares: { use: () => {} },
+      httpServer: { once: () => {} },
+      bindCLIShortcuts: (options: any) => { bound = options; },
+    };
+    await (tunnelPlugin(true, "/src/server/index.ts")[0].configureServer as any)(server);
+
+    const tty = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    const ci = process.env.CI;
+    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+    delete process.env.CI;
+    try {
+      server.bindCLIShortcuts({ print: true, customShortcuts: [{ key: "x", description: "theirs" }] });
+      assert.deepStrictEqual(bound.customShortcuts.map((s: any) => s.key), ["x", "s"]);
+      assert.deepStrictEqual(lines, ["  ➜  press s + enter to share on a public URL"]);
+
+      // a rebind without print (Vite's restart) adds no second hint
+      server.bindCLIShortcuts({});
+      assert.strictEqual(lines.length, 1);
+    } finally {
+      if (tty) { Object.defineProperty(process.stdin, "isTTY", tty); } else { delete (process.stdin as any).isTTY; }
+      if (ci !== undefined) { process.env.CI = ci; }
+    }
   });
 
   it("protects only the entry when it sits at the root", () => {
