@@ -61,6 +61,9 @@ const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const NOOP = () => {};
 const noneSerializer = new NoneSerializer();
 
+// Server-initiated closes waiting on onLeave: one map for every room, as a client belongs to one.
+const pendingCloses = new WeakMap<Client, () => void>();
+
 /** Shared `enqueueRaw` options routing a frame onto `_pendingFrames` to ride the
  *  next patch. Frozen + shared (read-only) → zero per-call allocation. */
 const AFTER_PATCH_OPTS = Object.freeze({ afterNextPatch: true });
@@ -255,7 +258,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
   #_roomId: string;
   #_roomName: string;
   #_onLeaveConcurrent: number = 0; // number of onLeave calls in progress
-  #_pendingCloses = new WeakMap<Client, () => void>(); // server-initiated closes waiting on onLeave
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -2101,7 +2103,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._reserveSeat(sessionId, true, previousClient.auth, seconds, true);
 
     // the seat is held now: run a server-initiated close that's still waiting on onLeave
-    this.#_pendingCloses.get(previousClient)?.();
+    pendingCloses.get(previousClient)?.();
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred<Client & ClientPrivate>();
@@ -2478,11 +2480,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const ref = client.ref;
     const close = () => {
       // once only; skip if a successful reconnection has transplanted a new ref (#950)
-      if (this.#_pendingCloses.delete(client) && client.ref === ref) {
+      if (pendingCloses.delete(client) && client.ref === ref) {
         (client as any).leave(closeCode, reason);
       }
     };
-    this.#_pendingCloses.set(client, close);
+    pendingCloses.set(client, close);
     this._onLeave(client, closeCode).then(close);
   }
 
