@@ -38,6 +38,7 @@ import { prepareServices } from '@colyseus/core/internal';
 import { registerGracefulShutdown } from '@colyseus/core/utils/Utils';
 import type { DevEnvironment, Plugin } from 'vite';
 import type { ModuleRunner } from 'vite/module-runner';
+import { tunnelPlugin, type TunnelSetting } from './vite-tunnel.ts';
 
 // ─── Virtual module IDs ───────────────────────────────────────────────
 
@@ -83,6 +84,19 @@ export interface ColyseusViteOptions {
    * own HTTP server.
    */
   httpServer?: import('http').Server;
+  /**
+   * Share the dev server on a public URL: press `s` + enter. The first time,
+   * it logs in to Colyseus Cloud through the browser; then it prints
+   * `https://<name>.play.colyseus.dev` and its QR code. Players get the
+   * page, HMR and the game server. Needs `@colyseus/tunnel` installed.
+   *
+   * `{ name }` asks for that name. Without one, the edge picks a random name,
+   * kept until Vite exits. `false` leaves the shortcut out.
+   *
+   * Requests through the tunnel get 404 for the server entry's folder, so
+   * keep server-only code there; the client may still `import type` from it.
+   */
+  tunnel?: TunnelSetting;
 }
 
 // ─── Internal types ───────────────────────────────────────────────────
@@ -366,6 +380,8 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         }
       },
     },
+
+    ...tunnelPlugin(options.tunnel, options.serverEntry),
   ];
 
   /**
