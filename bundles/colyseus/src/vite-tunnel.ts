@@ -106,17 +106,25 @@ function localAddress(server: ViteDevServer): string | undefined {
 
 /** A middleware turning tunnelled requests for the server entry's folder away. */
 export function guard(root: string, serverEntry: string, hostSuffix: string) {
-  const entry = path.isAbsolute(serverEntry) && serverEntry.startsWith(root) ? serverEntry : path.join(root, serverEntry);
+  // Windows paths compare without case: C:\App and c:\app are one folder
+  const key = (file: string) => process.platform === 'win32' ? path.resolve(file).toLowerCase() : path.resolve(file);
+  const entry = key(path.isAbsolute(serverEntry) && serverEntry.startsWith(root) ? serverEntry : path.join(root, serverEntry));
   const dir = path.dirname(entry);
-  const inside = (file: string) => file === entry || (dir !== root && (file === dir || file.startsWith(dir + path.sep)));
+  const top = key(root);
+  const inside = (file: string) => {
+    const f = key(file);
+    return f === entry || (dir !== top && (f === dir || f.startsWith(dir + path.sep)));
+  };
 
   return (req: any, res: any, next: () => void) => {
     const host = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
     if (!host.endsWith(hostSuffix)) { return next(); }
     let p = String(req.url ?? '/').split('?')[0];
     try { p = decodeURIComponent(p); } catch { /* left encoded: Vite won't find it either */ }
-    // `/@fs/<abs>` and `/@id/<id>` name files outside the root's URL space.
+    // `/@fs/<abs>` and `/@id/<id>` name files outside the root's URL space;
+    // on Windows the absolute path starts with its drive: /@fs/C:/app/...
     p = p.replace(/^\/@(fs|id)\//, '/');
+    if (/^\/[A-Za-z]:[\\/]/.test(p)) { p = p.slice(1); }
     if (inside(path.join(root, p)) || inside(path.resolve(p))) {
       res.statusCode = 404;
       return res.end();

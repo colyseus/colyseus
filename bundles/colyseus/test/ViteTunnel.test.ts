@@ -4,6 +4,8 @@ import path from "path";
 import { guard } from "../src/vite-tunnel.ts";
 
 const ROOT = path.join(import.meta.dirname, "app");
+/** `/@fs` + an absolute path, as Vite writes it: `/@fs/C:/...` on Windows. */
+const FS = "/@fs" + (ROOT.startsWith("/") ? "" : "/") + ROOT.replaceAll("\\", "/");
 
 /** The status `guard` answers `url` on `host` with, or "next" when it lets it through. */
 function statusOf(url: string, host = "game.play.colyseus.dev", entry = "/src/server/index.ts") {
@@ -19,8 +21,8 @@ describe("Vite plugin: tunnel", () => {
     assert.strictEqual(statusOf("/src/server/rooms/Lobby.ts?import"), 404);
     assert.strictEqual(statusOf("/src/%73erver/secret.ts"), 404);
     assert.strictEqual(statusOf("/src/client/../server/secret.ts"), 404);
-    assert.strictEqual(statusOf(`/@fs${ROOT}/src/server/secret.ts`), 404);
-    assert.strictEqual(statusOf(`/@id/${ROOT}/src/server/secret.ts`), 404);
+    assert.strictEqual(statusOf(`${FS}/src/server/secret.ts`), 404);
+    assert.strictEqual(statusOf(`/@id/${FS.slice("/@fs/".length)}/src/server/secret.ts`), 404);
   });
 
   it("lets the rest through, and every local request", () => {
