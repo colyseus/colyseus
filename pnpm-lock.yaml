@@ -1105,6 +1105,19 @@ importers:
       '@types/node':
         specifier: ^22.13.14
         version: 22.19.19
+    optionalDependencies:
+      '@colyseus/tunnel-darwin-arm64':
+        specifier: 0.18.0
+        version: 0.18.0
+      '@colyseus/tunnel-darwin-x64':
+        specifier: 0.18.0
+        version: 0.18.0
+      '@colyseus/tunnel-linux-arm64':
+        specifier: 0.18.0
+        version: 0.18.0
+      '@colyseus/tunnel-linux-x64':
+        specifier: 0.18.0
+        version: 0.18.0
 
 packages:
 
@@ -1570,6 +1583,26 @@ packages:
 
   '@colyseus/timer@2.0.3':
     resolution: {integrity: sha512-75MI7LfXQncibesa7W6FKWUc8YBcVI6jwBrDXOq1TlgYQXSMRv7a5WFPBdDKkP5Pht9IWpE2hyUb8B1DPrLYqg==}
+
+  '@colyseus/tunnel-darwin-arm64@0.18.0':
+    resolution: {integrity: sha512-auyH0/NAJJNkJm0xrGe8jtQI0/XDcD+siOxR9QZiL2j8K2Q0/o8wKW2mdSKFheg2WB4LWeQM1bf/ZefUawUYYw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@colyseus/tunnel-darwin-x64@0.18.0':
+    resolution: {integrity: sha512-8nHknPkcWwv/BKZLkcZTHzyNiVLUzm5Qc1mVujf8yQ6LlKKRFxO93dqIBHJq/ylZM59HtCLWPvKEVKfC06a03w==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@colyseus/tunnel-linux-arm64@0.18.0':
+    resolution: {integrity: sha512-aopiE9XLk1L+OwYJceBpXaoooTACL24ZimrxXFoT4feUWuTHOdfygWa53R3SXySu0wheKMj/Kl1Gog/y43TL/Q==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@colyseus/tunnel-linux-x64@0.18.0':
+    resolution: {integrity: sha512-3SMnOdlrTXsv1bFcc/obdVZXrArd0etBoqcVImmBUcERheijeoGflYbxizIsnB6oIQTtzUNrIod5H8nfqAeiPQ==}
+    cpu: [x64]
+    os: [linux]
 
   '@cspell/cspell-bundled-dicts@9.8.0':
     resolution: {integrity: sha512-MpXFpVyBPfJQ1YuVotljqUaGf6lWuf+fuWBBgs0PHFYTSjRPWuIxviAaCDnup/CJLLH60xQL4IlcQe4TOjzljw==}
@@ -9938,6 +9971,18 @@ snapshots:
   '@colyseus/timer@2.0.3':
     dependencies:
       '@colyseus/clock': 2.0.3
+
+  '@colyseus/tunnel-darwin-arm64@0.18.0':
+    optional: true
+
+  '@colyseus/tunnel-darwin-x64@0.18.0':
+    optional: true
+
+  '@colyseus/tunnel-linux-arm64@0.18.0':
+    optional: true
+
+  '@colyseus/tunnel-linux-x64@0.18.0':
+    optional: true
 
   '@cspell/cspell-bundled-dicts@9.8.0':
     dependencies:
