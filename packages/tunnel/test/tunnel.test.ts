@@ -1,5 +1,6 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -13,6 +14,25 @@ function callbackOf(prompt: string, token: string, state?: string) {
   const url = new URL(prompt.slice(prompt.indexOf('http')));
   const port = url.searchParams.get('port');
   return `http://127.0.0.1:${port}/callback?state=${state ?? url.searchParams.get('state')}&token=${encodeURIComponent(token)}`;
+}
+
+/** Where the login's tab is served. */
+function baseOf(prompt: string) {
+  return `http://127.0.0.1:${new URL(prompt.slice(prompt.indexOf('http'))).searchParams.get('port')}`;
+}
+
+async function stateOf(base: string): Promise<string> {
+  return (await (await fetch(`${base}/status`)).json()).state;
+}
+
+/** A request naming another host, as a DNS-rebound page's would. */
+function getWithHost(url: string, host: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    http.get(url, { headers: { host } }, (res) => {
+      res.resume();
+      resolve(res.statusCode!);
+    }).on('error', reject);
+  });
 }
 
 describe('@colyseus/tunnel', () => {
@@ -91,17 +111,67 @@ describe('@colyseus/tunnel', () => {
     while (!prompt) { await new Promise((r) => setTimeout(r, 10)); }
 
     assert.strictEqual((await fetch(callbackOf(prompt, '7|x', 'forged'))).status, 400);
-    assert.strictEqual((await fetch(callbackOf(prompt, '7|good'))).status, 200);
+    const back = await fetch(callbackOf(prompt, '7|good'), { redirect: 'manual' });
+    assert.strictEqual(back.status, 303);
+    assert.strictEqual(back.headers.get('location'), '/done'); // the token leaves the address bar
     assert.strictEqual(await pending, '7|good');
 
     assert.strictEqual(storedToken(), '7|good');
     assert.strictEqual(fs.statSync(path.join(home, '.colyseus', 'tunnel.json')).mode & 0o777, 0o600);
+
+    const base = baseOf(prompt);
+    assert.strictEqual(await getWithHost(`${base}/status`, 'rebound.example:80'), 400);
+    assert.strictEqual(await stateOf(base), 'done');
+    const page = await (await fetch(`${base}/done`)).text();
+    assert.match(page, /Return to your terminal/);
+    assert.ok(!page.includes('7|good'));
+    await assert.rejects(fetch(`${base}/status`)); // nothing more to show: closed
+  });
+
+  it('shows the tunnel in the login tab, and that it stopped', async () => {
+    let base = '';
+    const tunnel = await openTunnel({
+      local: 2567,
+      name: 'game',
+      log: (l) => {
+        if (!l.startsWith('Log in')) { return; }
+        base = baseOf(l);
+        fetch(callbackOf(l, '3|tab'));
+      },
+    });
+    assert.strictEqual(await stateOf(base), 'live');
+    const page = await (await fetch(`${base}/done`)).text();
+    assert.match(page, /Sharing<\/span><span class="off">Stopped sharing<\/span> localhost:2567/);
+    assert.match(page, /href="https:\/\/game\.play\.test"/);
+    assert.match(page, /<svg[^>]*viewBox="0 0 \d+ \d+"/); // the QR code
+    assert.ok(!page.includes('3|tab'));
+
+    await tunnel.close();
+    await new Promise((r) => setTimeout(r, 50));
+    await assert.rejects(fetch(`${base}/status`)); // the tab now says sharing stopped
+  });
+
+  it('says in the login tab why the tunnel didn\'t open', async () => {
+    let base = '';
+    await assert.rejects(openTunnel({
+      local: 5173,
+      name: 'taken',
+      timeoutMs: 1000,
+      log: (l) => {
+        if (!l.startsWith('Log in')) { return; }
+        base = baseOf(l);
+        fetch(callbackOf(l, '4|x'));
+      },
+    }), (e: TunnelError) => e.code === 'timeout');
+    assert.strictEqual(await stateOf(base), 'failed');
+    assert.match(await (await fetch(`${base}/done`)).text(), /The edge gave no URL in 1 s\./);
   });
 
   it('waits for the edge to take a new login instead of logging in again', async () => {
     const knows = path.join(home, 'edge-knows');
     process.env.FAKE_EDGE_KNOWS = knows;
     const lines: string[] = [];
+    const states: string[] = [];
     let logins = 0;
     const tunnel = await openTunnel({
       local: 2567,
@@ -110,12 +180,16 @@ describe('@colyseus/tunnel', () => {
         if (!l.startsWith('Log in')) { return; }
         logins++;
         fetch(callbackOf(l, '9|new'));
-        setTimeout(() => fs.writeFileSync(knows, ''), 1000); // the edge's next pull
+        setTimeout(async () => {
+          states.push(await stateOf(baseOf(l)));
+          fs.writeFileSync(knows, ''); // the edge's next pull
+        }, 1000);
       },
     });
     delete process.env.FAKE_EDGE_KNOWS;
     assert.strictEqual(tunnel.url, 'https://r4nd0m00.play.test');
     assert.strictEqual(logins, 1);
+    assert.deepStrictEqual(states, ['connecting']);
     assert.deepStrictEqual(lines.filter((l) => !l.startsWith('Log in')), ['Waiting for the tunnel edge to take your new login...']);
     await tunnel.close();
   });

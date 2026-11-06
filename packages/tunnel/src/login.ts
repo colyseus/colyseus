@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { statePage, wrongLinkPage, type PageState } from './page.ts';
 
 /** Colyseus Cloud: `CLOUD_ENDPOINT`, as for `@colyseus/cloud`, else production. */
 export function cloudEndpoint(): string {
@@ -49,11 +50,17 @@ export interface LoginOptions {
   timeoutMs?: number;
 }
 
-const DONE_HTML = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/><title>Sharing is set up - Colyseus Cloud</title></head>
-<body style="display:flex;align-items:center;justify-content:center;font-family:Arial;font-size:1.2em">
-<p>✓ You can close this tab and go back to your terminal.</p>
-</body></html>`;
+/** The browser tab a login leaves open, which `openTunnel()` keeps up to date. */
+export interface LoginPage {
+  show(state: PageState): void;
+  /** Stop answering: an open tab then says the terminal is gone. */
+  close(): void;
+}
+
+/** How long the page's server outlives a login whose tunnel never opens or fails. */
+const PAGE_IDLE_MS = 10 * 60_000;
+/** After a last state, how long a polling tab has to fetch it. */
+const LAST_STATE_MS = 10_000;
 
 /**
  * Get a tunnel token from Colyseus Cloud through the browser, and store it
@@ -67,6 +74,15 @@ const DONE_HTML = `<!DOCTYPE html>
  * URL.
  */
 export async function login(options: LoginOptions = {}): Promise<string> {
+  return (await loginInBrowser(options)).token;
+}
+
+/**
+ * `login()`, with the tab it leaves: `/callback` redirects to `/done`, so the token doesn't stay
+ * in the address bar, and `/done` shows `state` (`done` by default). The server keeps answering
+ * `/done` and `/status` for `page`, without holding the process up.
+ */
+export async function loginInBrowser(options: LoginOptions & { state?: PageState } = {}): Promise<{ token: string; page: LoginPage }> {
   const endpoint = options.endpoint ?? cloudEndpoint();
   const log = options.log ?? console.log;
   const state = randomBytes(16).toString('hex');
@@ -75,42 +91,95 @@ export async function login(options: LoginOptions = {}): Promise<string> {
   let reject!: (e: Error) => void;
   const got = new Promise<string>((res, rej) => { resolve = res; reject = rej; });
 
+  let shown: PageState | undefined; // set by the callback
+  let closeTimer: NodeJS.Timeout | undefined;
+  const close = () => {
+    clearTimeout(closeTimer);
+    server.close();
+    server.closeAllConnections();
+  };
+  const last = () => shown?.state === 'done' || shown?.state === 'failed';
+  // a live page lasts as long as its tunnel, which closes it
+  const schedule = () => {
+    clearTimeout(closeTimer);
+    if (shown?.state === 'live') { return; }
+    closeTimer = setTimeout(close, last() ? LAST_STATE_MS : PAGE_IDLE_MS).unref();
+  };
+
+  let host = '';
   const server = http.createServer((req, res) => {
+    // only our own 127.0.0.1 link: a DNS-rebound page can't read the tunnel's URL off /status
+    if (req.headers.host !== host) {
+      res.writeHead(400).end();
+      return;
+    }
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    if (url.pathname !== '/callback') {
+
+    if (url.pathname === '/callback') {
+      const token = url.searchParams.get('token');
+      if (url.searchParams.get('state') !== state || (!shown && !token)) {
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' }).end(wrongLinkPage());
+        return;
+      }
+      if (!shown) {
+        shown = options.state ?? { state: 'done' };
+        resolve(token!);
+      }
+      res.writeHead(303, { Location: '/done' }).end();
+
+    } else if (url.pathname === '/done' && shown) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+        .end(statePage(shown), () => { if (last()) { close(); } });
+
+    } else if (url.pathname === '/status' && shown) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        .end(JSON.stringify({ state: shown.state }));
+
+    } else {
       res.writeHead(404).end();
-      return;
     }
-    const token = url.searchParams.get('token');
-    if (url.searchParams.get('state') !== state || !token) {
-      res.writeHead(400, { 'Content-Type': 'text/plain' }).end('This login link is not the one your terminal is waiting for.\n');
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': 'text/html' }).end(DONE_HTML, () => resolve(token));
   });
 
+  // a polling tab's keep-alive socket mustn't hold the process; until the callback, the timer does
+  server.on('connection', (socket) => socket.unref());
   await new Promise<void>((res, rej) => {
     server.once('error', rej);
     server.listen(0, '127.0.0.1', () => res());
   });
+  const port = (server.address() as { port: number }).port;
+  host = `127.0.0.1:${port}`;
   const timer = setTimeout(() => reject(new Error('the login timed out')), options.timeoutMs ?? 5 * 60_000);
 
+  let token: string;
   try {
-    const port = (server.address() as { port: number }).port;
     const url = `${endpoint}/tunnel/authorize?port=${port}&state=${state}`;
     log(`Log in to Colyseus Cloud to share: ${url}`);
     openBrowser(url);
 
-    const token = await got;
-    const store = readStore();
-    store[endpoint] = { token };
-    writeStore(store);
-    return token;
+    token = await got;
+  } catch (e) {
+    close();
+    throw e;
   } finally {
     clearTimeout(timer);
-    server.close();
-    server.closeAllConnections();
   }
+
+  const store = readStore();
+  store[endpoint] = { token };
+  writeStore(store);
+
+  server.unref();
+  schedule();
+  return {
+    token,
+    page: {
+      show(next) {
+        shown = next;
+        schedule();
+      },
+      close,
+    },
+  };
 }
 
 function openBrowser(url: string) {

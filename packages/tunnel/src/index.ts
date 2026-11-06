@@ -12,7 +12,7 @@
 // TS 6 loads no @types by default, and no dependency here references node's.
 import { renderUnicodeCompact } from 'uqr';
 import { startAgent, type AgentProcess } from './agent.ts';
-import { cloudEndpoint, forgetToken, login, storedToken } from './login.ts';
+import { cloudEndpoint, forgetToken, loginInBrowser, storedToken, type LoginPage } from './login.ts';
 
 export { login, forgetToken as logout, storedToken, cloudEndpoint } from './login.ts';
 export { agentPath } from './agent.ts';
@@ -95,39 +95,51 @@ export async function openTunnel(options: TunnelOptions): Promise<Tunnel> {
   }
   let loggedInAt = 0;
   let waiting = false;
+  // the tab of this call's own login, which follows the tunnel
+  let page: LoginPage | undefined;
 
-  for (;;) {
-    if (!token) {
-      if (!mayLogin) { throw new TunnelError('no-token', 'no Colyseus Cloud token: set COLYSEUS_CLOUD_TOKEN, or log in'); }
-      token = await login({ endpoint, log });
-      source = 'fresh';
-      loggedInAt = Date.now();
-    }
-    try {
-      // while the edge learns a new login, its refusals are expected
-      const tunnel = await start(edge, local, credentials(token), options, waiting ? () => {} : log);
-      if (source !== 'given') {
-        tunnel.closed.then(({ revoked }) => { if (revoked) { forgetToken(endpoint); } });
+  try {
+    for (;;) {
+      if (!token) {
+        if (!mayLogin) { throw new TunnelError('no-token', 'no Colyseus Cloud token: set COLYSEUS_CLOUD_TOKEN, or log in'); }
+        ({ token, page } = await loginInBrowser({ endpoint, log, state: { state: 'connecting', local } }));
+        source = 'fresh';
+        loggedInAt = Date.now();
       }
-      return tunnel;
-    } catch (e) {
-      if (!(e instanceof TunnelError) || e.code !== 'unauthorized' || source === 'given') { throw e; }
-      if (source === 'fresh') {
-        // The edge pulls new logins from Cloud every few seconds: wait for it, not another login.
-        if (Date.now() - loggedInAt > NEW_LOGIN_WAIT_MS) {
-          throw new TunnelError('unauthorized', "the edge hasn't taken your new login yet; try again in a minute");
+      try {
+        // while the edge learns a new login, its refusals are expected
+        const tunnel = await start(edge, local, credentials(token), options, waiting ? () => {} : log);
+        if (source !== 'given') {
+          tunnel.closed.then(({ revoked }) => { if (revoked) { forgetToken(endpoint); } });
         }
-        if (!waiting) { log('Waiting for the tunnel edge to take your new login...'); }
-        waiting = true;
-        await new Promise((resolve) => setTimeout(resolve, NEW_LOGIN_RETRY_MS));
-        continue;
+        if (page) {
+          const tab = page;
+          tab.show({ state: 'live', url: tunnel.url, local });
+          tunnel.closed.then(() => tab.close());
+        }
+        return tunnel;
+      } catch (e) {
+        if (!(e instanceof TunnelError) || e.code !== 'unauthorized' || source === 'given') { throw e; }
+        if (source === 'fresh') {
+          // The edge pulls new logins from Cloud every few seconds: wait for it, not another login.
+          if (Date.now() - loggedInAt > NEW_LOGIN_WAIT_MS) {
+            throw new TunnelError('unauthorized', "the edge hasn't taken your new login yet; try again in a minute");
+          }
+          if (!waiting) { log('Waiting for the tunnel edge to take your new login...'); }
+          waiting = true;
+          await new Promise((resolve) => setTimeout(resolve, NEW_LOGIN_RETRY_MS));
+          continue;
+        }
+        // A stored token can be revoked: log in again, once.
+        forgetToken(endpoint);
+        if (!mayLogin) { throw e; }
+        log('Your Colyseus Cloud login was turned down; logging in again.');
+        token = undefined;
       }
-      // A stored token can be revoked: log in again, once.
-      forgetToken(endpoint);
-      if (!mayLogin) { throw e; }
-      log('Your Colyseus Cloud login was turned down; logging in again.');
-      token = undefined;
     }
+  } catch (e) {
+    page?.show({ state: 'failed', message: (e as Error).message });
+    throw e;
   }
 }
 
