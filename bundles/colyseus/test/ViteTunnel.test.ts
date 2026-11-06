@@ -63,7 +63,8 @@ describe("Vite plugin: tunnel", () => {
     try {
       server.bindCLIShortcuts({ print: true, customShortcuts: [{ key: "x", description: "theirs" }] });
       assert.deepStrictEqual(bound.customShortcuts.map((s: any) => s.key), ["x", "s"]);
-      assert.deepStrictEqual(lines, ["  ➜  press s + enter to share on a public URL"]);
+      assert.deepStrictEqual(lines, ["  ➜  press s + enter to share on a public URL (*.play.colyseus.dev)"]);
+      assert.strictEqual(bound.customShortcuts[1].description, "share on a public URL (*.play.colyseus.dev)");
 
       // a rebind without print (Vite's restart) adds no second hint
       server.bindCLIShortcuts({});

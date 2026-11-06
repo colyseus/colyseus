@@ -83,6 +83,7 @@ export function tunnelPlugin(setting: TunnelSetting | undefined, serverEntry: st
     async configureServer(server) {
       const t = await load();
       if (t) { server.middlewares.use(guard(server.config.root, serverEntry, t.tunnelHostSuffix())); }
+      const description = t ? `share on a public URL (*${t.tunnelHostSuffix()})` : 'share on a public URL';
 
       // Vite's CLI binds its shortcuts once it listens; ours go along, hinted under its "h + enter".
       const bind = server.bindCLIShortcuts.bind(server);
@@ -91,12 +92,12 @@ export function tunnelPlugin(setting: TunnelSetting | undefined, serverEntry: st
           ...options,
           customShortcuts: [
             ...(options?.customShortcuts ?? []),
-            { key: 's', description: 'share on a public URL', action: share },
+            { key: 's', description, action: share },
           ],
         });
         // Vite binds them only on a TTY outside CI
         if (options?.print && server.httpServer && process.stdin.isTTY && !process.env.CI) {
-          server.config.logger.info(paint(2, 22, paint(32, 39, '  ➜') + '  press ') + paint(1, 22, 's + enter') + paint(2, 22, ' to share on a public URL'));
+          server.config.logger.info(paint(2, 22, paint(32, 39, '  ➜') + '  press ') + paint(1, 22, 's + enter') + paint(2, 22, ` to ${description}`));
         }
       };
 
