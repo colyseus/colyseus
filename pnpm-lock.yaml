@@ -129,6 +129,9 @@ importers:
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../../packages/sdk
+      '@colyseus/tunnel':
+        specifier: workspace:^
+        version: link:../../packages/tunnel
       '@colyseus/uwebsockets-transport':
         specifier: workspace:^
         version: link:../../packages/transport/uwebsockets-transport
@@ -1093,6 +1096,32 @@ importers:
         specifier: workspace:^
         version: link:../../core
 
+  packages/tunnel:
+    dependencies:
+      uqr:
+        specifier: ^0.1.3
+        version: 0.1.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.14
+        version: 22.19.19
+    optionalDependencies:
+      '@colyseus/tunnel-darwin-arm64':
+        specifier: 0.18.1
+        version: 0.18.1
+      '@colyseus/tunnel-darwin-x64':
+        specifier: 0.18.1
+        version: 0.18.1
+      '@colyseus/tunnel-linux-arm64':
+        specifier: 0.18.1
+        version: 0.18.1
+      '@colyseus/tunnel-linux-x64':
+        specifier: 0.18.1
+        version: 0.18.1
+      '@colyseus/tunnel-win32-x64':
+        specifier: 0.18.1
+        version: 0.18.1
+
 packages:
 
   '@alloc/quick-lru@5.2.0':
@@ -1557,6 +1586,31 @@ packages:
 
   '@colyseus/timer@2.0.3':
     resolution: {integrity: sha512-75MI7LfXQncibesa7W6FKWUc8YBcVI6jwBrDXOq1TlgYQXSMRv7a5WFPBdDKkP5Pht9IWpE2hyUb8B1DPrLYqg==}
+
+  '@colyseus/tunnel-darwin-arm64@0.18.1':
+    resolution: {integrity: sha512-My1T7RUYmRAAHGgrXOoxGEQBtJYZih8LyXI/i5yYOWjW1s14R/dRJ1sVd/Kcbwk1jeZDUZB10XVenAOROL/TpQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@colyseus/tunnel-darwin-x64@0.18.1':
+    resolution: {integrity: sha512-lDkLdT3467RLl26pXVlKaIWEcNnjb5LxNAynE7UEDqlIiGS0OUqM2Vdq7ZIjQlfqsbbEQIfKzQOC83ewcsqdeQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@colyseus/tunnel-linux-arm64@0.18.1':
+    resolution: {integrity: sha512-8KyBOLOpyUip6b1Puq7DeTV/uelW6dITR/kX7svJjmEdLW7QVazISrLNiTrpf+Tz2iJs5S3F4Zmm/s9e1jWVlQ==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@colyseus/tunnel-linux-x64@0.18.1':
+    resolution: {integrity: sha512-Y6wfSL0Dup6RKyWTpxNHA3InkO4Js2WrQiltw6Qp+lA+mDu3T0ZNJWhIH7tYTa9chWS+wbcQ9GmgtBc8IaDQlw==}
+    cpu: [x64]
+    os: [linux]
+
+  '@colyseus/tunnel-win32-x64@0.18.1':
+    resolution: {integrity: sha512-ZtJ5q7WuUJ30ddbFqofLsr77aRy6rH7onm9OgAKnfek9rKIHfTdJdLGnviJ1E+D/1YupqFPiwSvwfdv0OVO9Iw==}
+    cpu: [x64]
+    os: [win32]
 
   '@cspell/cspell-bundled-dicts@9.8.0':
     resolution: {integrity: sha512-MpXFpVyBPfJQ1YuVotljqUaGf6lWuf+fuWBBgs0PHFYTSjRPWuIxviAaCDnup/CJLLH60xQL4IlcQe4TOjzljw==}
@@ -8802,6 +8856,9 @@ packages:
     peerDependencies:
       browserslist: '>= 4.21.0'
 
+  uqr@0.1.3:
+    resolution: {integrity: sha512-0rjE8iEJe4YmT9TOhwsZtqCMRLc5DXZUI2UEYUUg63ikBkqqE5EYWaI0etFe/5KUcmcYwLih2RND1kq+hrUJXA==}
+
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
@@ -9922,6 +9979,21 @@ snapshots:
   '@colyseus/timer@2.0.3':
     dependencies:
       '@colyseus/clock': 2.0.3
+
+  '@colyseus/tunnel-darwin-arm64@0.18.1':
+    optional: true
+
+  '@colyseus/tunnel-darwin-x64@0.18.1':
+    optional: true
+
+  '@colyseus/tunnel-linux-arm64@0.18.1':
+    optional: true
+
+  '@colyseus/tunnel-linux-x64@0.18.1':
+    optional: true
+
+  '@colyseus/tunnel-win32-x64@0.18.1':
+    optional: true
 
   '@cspell/cspell-bundled-dicts@9.8.0':
     dependencies:
@@ -17100,6 +17172,8 @@ snapshots:
       browserslist: 4.28.2
       escalade: 3.2.0
       picocolors: 1.1.1
+
+  uqr@0.1.3: {}
 
   uri-js@4.4.1:
     dependencies:
