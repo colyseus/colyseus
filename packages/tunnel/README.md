@@ -23,8 +23,10 @@ colyseus({ serverEntry: "/src/server/index.ts", tunnel: { name: "mygame" } })
 ```
 
 `tunnel: { name }` asks for `https://mygame.play.colyseus.dev`, and
-`tunnel: false` removes the shortcut. Players can't load files from your
-server entry's folder.
+`tunnel: false` removes the shortcut. Players get what a build would ship:
+`public/`, your pages and what they load. Other files in your project, and
+your server entry's folder, answer 404. A file the page fetches at runtime
+goes in `public/`, as it would for a build.
 
 ## From the command line
 

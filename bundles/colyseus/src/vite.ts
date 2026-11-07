@@ -93,8 +93,12 @@ export interface ColyseusViteOptions {
    * `{ name }` asks for that name. Without one, the edge picks a random name,
    * kept until Vite exits. `false` leaves the shortcut out.
    *
-   * Requests through the tunnel get 404 for the server entry's folder, so
-   * keep server-only code there; the client may still `import type` from it.
+   * Through the tunnel, players get what `vite build` would ship: `public/`,
+   * your pages and what they load, from `import`s to the assets beside them.
+   * Other files in the project answer 404, and so does the server entry's
+   * folder, so keep server-only code there; the client may still
+   * `import type` from it. A file the page fetches at runtime belongs in
+   * `public/`, as it would for a build.
    */
   tunnel?: TunnelSetting;
 }
