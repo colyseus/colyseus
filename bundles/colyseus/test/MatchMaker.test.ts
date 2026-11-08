@@ -943,6 +943,53 @@ describe("MatchMaker", () => {
           assert.strictEqual(1, (await driver.query({})).length);
         });
 
+        it("should not report a room as full when its process fails to reserve a seat", async () => {
+          await createRemoteRoomCache("remote1", "RemoteRoom");
+          await subscribeIPC(matchMaker.presence, "$RemoteRoom", () => {
+            throw new Error("presence is down");
+          });
+
+          try {
+            const [room] = await driver.query({ roomId: "RemoteRoom" });
+            await assert.rejects(matchMaker.reserveSeatFor(room, {}), (e: Error) => {
+              // join() and joinOrCreate() only retry a SeatReservationError
+              assert.strictEqual(e.constructor.name, "SeatReservationError");
+              assert.strictEqual(e.message, "RemoteRoom could not reserve a seat: presence is down");
+              return true;
+            });
+
+          } finally {
+            matchMaker.presence.unsubscribe("$RemoteRoom");
+          }
+        });
+
+        it("should not report a room as full when a room in this process fails to reserve a seat", async () => {
+          const room = await matchMaker.createRoom("dummy", {});
+          matchMaker.getLocalRoomById(room.roomId)['_reserveSeat'] = async () => {
+            throw new Error("driver is down");
+          };
+
+          await assert.rejects(matchMaker.reserveSeatFor(room, {}), (e: Error) => {
+            assert.strictEqual(e.constructor.name, "SeatReservationError");
+            assert.strictEqual(e.message, `${room.roomId} could not reserve a seat: driver is down`);
+            return true;
+          });
+        });
+
+        it("should not report a room as full when its seat reservation times out on a healthy process", async () => {
+          // nothing answers on "$SlowRoom", but this process answers its own health-check
+          await createDummyRoomCache({
+            processId: matchMaker.processId, roomId: "SlowRoom", name: "one", locked: false, clients: 1, maxClients: 4,
+          });
+
+          const [room] = await driver.query({ roomId: "SlowRoom" });
+          await assert.rejects(matchMaker.reserveSeatFor(room, {}), (e: Error) => {
+            assert.strictEqual(e.constructor.name, "SeatReservationError");
+            assert.strictEqual(e.message, "SlowRoom could not reserve a seat: ipc_timeout");
+            return true;
+          });
+        });
+
         it("should leave a receipt for the process whose room listings it removed", async () => {
           await createRemoteRoomCache("stalled1", "StalledRoom");
 

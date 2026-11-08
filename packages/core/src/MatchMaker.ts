@@ -423,7 +423,9 @@ export async function remoteRoomCall(
       // perform a health-check on the process before proceeding.
       // (this is a broken state when a process wasn't gracefully shut down)
       //
-      if (method === '_reserveSeat' && e.message === "ipc_timeout") {
+      // reserveSeatFor() does the health-check, and reports any other error as it is.
+      //
+      if (method === '_reserveSeat') {
         throw e;
       }
 
@@ -982,7 +984,7 @@ export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, a
       throw new SeatReservationError(`process ${room.processId} is not available.`);
 
     } else {
-      successfulSeatReservation = false;
+      throw new SeatReservationError(`${room.roomId} could not reserve a seat: ${e.message}`);
     }
   }
 
