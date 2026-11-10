@@ -443,7 +443,9 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
             return await this.consumeSeatReservation<T>(response, rootSchema);
         } catch (error) {
             if (error instanceof ServerError) {
-                throw new MatchMakeError(error.message, error.code);
+                // the body has the ErrorCode; the status may be a standard one (see colyseus#999)
+                const code = (typeof error.data?.code === "number") ? error.data.code : error.code;
+                throw new MatchMakeError(error.message, code);
             }
             throw error;
         }

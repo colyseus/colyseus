@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.10
+
+- `MatchMakeError.code` is now the server's `ErrorCode` even when the server sends standard HTTP statuses (`matchMaker.controller.standardHttpStatus` in `@colyseus/core` 0.18.28). A custom code like `ServerError(4000, …)` now reaches it too, where it used to be 500. [#999](https://github.com/colyseus/colyseus/issues/999)
+
 ## 0.18.9
 
 - Hardened the debug tooling so it's only wired up when `@colyseus/sdk/debug` is imported. Script-tag apps must now load `dist/debug.js` before the first join.
