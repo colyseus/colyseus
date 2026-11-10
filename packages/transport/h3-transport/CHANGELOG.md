@@ -2,7 +2,7 @@
 
 ## 0.18.6
 
-- Supports `room.autoBatchMessages` and `room.batchMessages()` (`@colyseus/core` 0.18.28): what they hold for a client is written to its stream at once. With an older `@colyseus/core`, nothing changes.
+- Supports `room.autoBatchMessages` and `room.batchMessages()` from `@colyseus/core` 0.18.28, which send a tick's messages to each client in one write instead of one per message. Nothing changes with an older `@colyseus/core`. [#995](https://github.com/colyseus/colyseus/pull/995)
 
 ## 0.18.5
 
