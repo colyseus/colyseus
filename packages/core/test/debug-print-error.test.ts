@@ -40,6 +40,18 @@ describe('debugAndPrintError', () => {
     expect(printed).toEqual([{ level: 'warn', text: 'ServerError 520: provided room name "gameRoom" not defined' }]);
   });
 
+  it('prints what a wrapped exception was, as Room does for a throwing onLeave()', () => {
+    delete process.env.NODE_ENV;
+    debugAndPrintError(new ServerError(4002, 'onLeave error', { cause: new TypeError('player is undefined') }));
+    expect(printed).toHaveLength(1);
+    expect(printed[0].level).toBe('warn');
+    expect(printed[0].text).toMatch(/^ServerError 4002: onLeave error\nTypeError: player is undefined\n\s+at /);
+
+    printed.length = 0;
+    debugAndPrintError(new ServerError(4002, 'onLeave error', { cause: 'oops' })); // a thrown non-Error
+    expect(printed).toEqual([{ level: 'warn', text: 'ServerError 4002: onLeave error\noops' }]);
+  });
+
   it('keeps a ServerError silent in production', () => {
     process.env.NODE_ENV = 'production';
     debugAndPrintError(notDefined());

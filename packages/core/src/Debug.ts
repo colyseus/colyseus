@@ -34,7 +34,8 @@ export const debugAndPrintError = (e: Error | string) => {
 
   } else if (process.env.NODE_ENV !== 'production' && !debugError.enabled) {
     // also thrown from room code (e.g. onJoin), where silence hides the bug
-    logger.warn(`ServerError ${e.code}: ${e.message}`);
+    const cause = (e.cause !== undefined) ? `\n${(e.cause as any)?.stack ?? e.cause}` : '';
+    logger.warn(`ServerError ${e.code}: ${e.message}${cause}`);
   }
 
   debugError.call(debugError, message);
