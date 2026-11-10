@@ -2,7 +2,7 @@ import * as httpClient from "httpie";
 import assert from "assert";
 
 import * as Colyseus from "@colyseus/sdk";
-import { Deferred, Room, Server, matchMaker } from "@colyseus/core";
+import { Deferred, ErrorCode, Room, Server, ServerError, matchMaker } from "@colyseus/core";
 import { DummyRoom } from "./utils/index.ts";
 import { URL } from "url";
 import { Schema, type, schema, t, type SchemaType } from "@colyseus/schema";
@@ -45,6 +45,59 @@ describe("Server", () => {
       assert.equal(data.name, 'roomName');
     });
 
+    //
+    // See: https://github.com/colyseus/colyseus/issues/999
+    //
+    describe("errors", () => {
+      const post = (roomName: string) => httpClient
+        .post(`http://localhost:${TEST_PORT}/matchmake/joinOrCreate/${roomName}`, { body: "{}" })
+        .catch((err) => err) // an error status rejects, with the same fields
+        .then(({ statusCode, data }) => ({ status: statusCode, body: data }));
+
+      const notDefined = { code: ErrorCode.MATCHMAKE_NO_HANDLER, error: 'provided room name "nonexisting" not defined' };
+
+      before(() => {
+        server.define("rejects_custom_code", class extends Room {
+          static async onAuth() { throw new ServerError(4000, "banned"); }
+        });
+        server.define("rejects_string_code", class extends Room {
+          static async onAuth() { throw Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }); }
+        });
+        server.define("rejects_auth", class extends Room {
+          static async onAuth() { return false; }
+        });
+      });
+
+      afterEach(() => { matchMaker.controller.standardHttpStatus = false; });
+
+      it("should send the ErrorCode as the HTTP status by default", async () => {
+        assert.deepStrictEqual(await post("nonexisting"), { status: ErrorCode.MATCHMAKE_NO_HANDLER, body: notDefined });
+      });
+
+      it("should send 500 for a code that isn't an HTTP error status, keeping it in the body", async () => {
+        assert.deepStrictEqual(await post("rejects_custom_code"), { status: 500, body: { code: 4000, error: "banned" } });
+
+        await assert.rejects(client.joinOrCreate("rejects_custom_code"), { name: "MatchMakeError", code: 4000, message: "banned" });
+      });
+
+      it("should report a driver's string code as MATCHMAKE_UNHANDLED", async () => {
+        const unhandled = { code: ErrorCode.MATCHMAKE_UNHANDLED, error: "connect ECONNREFUSED" };
+        assert.deepStrictEqual(await post("rejects_string_code"), { status: ErrorCode.MATCHMAKE_UNHANDLED, body: unhandled });
+
+        matchMaker.controller.standardHttpStatus = true;
+        assert.deepStrictEqual(await post("rejects_string_code"), { status: 500, body: unhandled });
+      });
+
+      it("should send standard HTTP statuses with standardHttpStatus, keeping the ErrorCode in the body", async () => {
+        matchMaker.controller.standardHttpStatus = true;
+
+        assert.deepStrictEqual(await post("nonexisting"), { status: 404, body: notDefined });
+        assert.deepStrictEqual(await post("rejects_auth"), { status: 401, body: { code: ErrorCode.AUTH_FAILED, error: "onAuth failed" } });
+
+        // the SDK still reports the ErrorCode
+        await assert.rejects(client.joinOrCreate("nonexisting"), { name: "MatchMakeError", code: ErrorCode.MATCHMAKE_NO_HANDLER });
+      });
+    });
 
   });
 

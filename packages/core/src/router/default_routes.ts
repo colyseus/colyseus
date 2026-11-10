@@ -50,7 +50,7 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
     }) as any;
 
   } catch (e: any) {
-    throw ctx.error(e.code, { code: e.code, error: e.message, });
+    throw ctx.error(matchMaker.controller.getHttpStatus(e.code), { code: e.code, error: e.message, });
   }
 
 });
