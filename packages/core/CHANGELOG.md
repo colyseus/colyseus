@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.28
+
+- A seat reservation that fails for any reason other than a full room no longer says `<roomId> is already full.`: it now says why, like `<roomId> could not reserve a seat: <reason>`. This includes `QueueRoom` groups. Thanks @kristenmontesano for the report and @JROtto5 for the fix! [#1001](https://github.com/colyseus/colyseus/pull/1001)
+
 ## 0.18.27
 
 - Matchmaking requests during a graceful shutdown now fail with a `MatchMakeError` (code 503) instead of `SyntaxError: Unexpected end of JSON input`. Thanks @portable-one! [#996](https://github.com/colyseus/colyseus/issues/996)

@@ -417,15 +417,8 @@ export async function remoteRoomCall(
       return await requestFromIPC(presence, getRoomChannel(roomId), method, args, rejectionTimeout);
 
     } catch (e: any) {
-
-      //
-      // the room cache from an unavailable process might've been used here.
-      // perform a health-check on the process before proceeding.
-      // (this is a broken state when a process wasn't gracefully shut down)
-      //
-      // reserveSeatFor() does the health-check, and reports any other error as it is.
-      //
-      if (method === '_reserveSeat') {
+      // seat reservations explain their own failures (see failSeatReservation())
+      if (method === '_reserveSeat' || method === '_reserveMultipleSeats') {
         throw e;
       }
 
@@ -956,37 +949,12 @@ export async function hotReload(): Promise<void> {
 export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, authData?: any) {
   const sessionId: string = authData?.sessionId || generateId();
 
-  let successfulSeatReservation: boolean;
-
-  try {
-    successfulSeatReservation = await remoteRoomCall<Room>(
-      room.roomId,
-      '_reserveSeat' as keyof Room,
-      [sessionId, options, authData],
-      REMOTE_ROOM_SHORT_TIMEOUT,
-    );
-
-  } catch (e: any) {
-    debugMatchMaking(e);
-
-    //
-    // the room cache from an unavailable process might've been used here.
-    // (this is a broken state when a process wasn't gracefully shut down)
-    // perform a health-check on the process before proceeding.
-    //
-    if (
-      e.message === "ipc_timeout" &&
-      !(
-        enableHealthChecks &&
-        await healthCheckProcessId(room.processId)
-      )
-    ) {
-      throw new SeatReservationError(`process ${room.processId} is not available.`);
-
-    } else {
-      throw new SeatReservationError(`${room.roomId} could not reserve a seat: ${e.message}`);
-    }
-  }
+  const successfulSeatReservation: boolean = await remoteRoomCall<Room>(
+    room.roomId,
+    '_reserveSeat' as keyof Room,
+    [sessionId, options, authData],
+    REMOTE_ROOM_SHORT_TIMEOUT,
+  ).catch((e) => failSeatReservation(room, e));
 
   if (!successfulSeatReservation) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
@@ -1014,39 +982,36 @@ export async function reserveMultipleSeatsFor(room: IRoomCache, clientsData: Arr
     sessionIds.join(', '), room.roomId, processId,
   );
 
-  let successfulSeatReservations: boolean[];
-
-  try {
-    successfulSeatReservations = await remoteRoomCall<Room>(
-      room.roomId,
-      '_reserveMultipleSeats' as keyof Room,
-      [sessionIds, options, authData],
-      REMOTE_ROOM_SHORT_TIMEOUT,
-    );
-
-  } catch (e: any) {
-    debugMatchMaking(e);
-
-    //
-    // the room cache from an unavailable process might've been used here.
-    // (this is a broken state when a process wasn't gracefully shut down)
-    // perform a health-check on the process before proceeding.
-    //
-    if (
-      e.message === "ipc_timeout" &&
-      !(
-        enableHealthChecks &&
-        await healthCheckProcessId(room.processId)
-      )
-    ) {
-      throw new SeatReservationError(`process ${room.processId} is not available.`);
-
-    } else {
-      throw new SeatReservationError(`${room.roomId} is already full.`);
-    }
-  }
+  const successfulSeatReservations: boolean[] = await remoteRoomCall<Room>(
+    room.roomId,
+    '_reserveMultipleSeats' as keyof Room,
+    [sessionIds, options, authData],
+    REMOTE_ROOM_SHORT_TIMEOUT,
+  ).catch((e) => failSeatReservation(room, e));
 
   return successfulSeatReservations;
+}
+
+/**
+ * Rejects for a `_reserveSeat`/`_reserveMultipleSeats` call that threw
+ * rather than answering. A full room answers `false` instead, so this never
+ * reports one: it names the process that's gone, or the reason the room gave.
+ * Always a `SeatReservationError`, so `join()`/`joinOrCreate()` retry it.
+ */
+async function failSeatReservation(room: IRoomCache, e: any): Promise<never> {
+  debugMatchMaking(e);
+
+  let reason = e.message;
+
+  if (reason === "ipc_timeout") {
+    // a listing left behind by a process that wasn't gracefully shut down
+    if (!enableHealthChecks || !(await healthCheckProcessId(room.processId))) {
+      throw new SeatReservationError(`process ${room.processId} is not available.`);
+    }
+    reason = `no reply in ${REMOTE_ROOM_SHORT_TIMEOUT}ms`;
+  }
+
+  throw new SeatReservationError(`${room.roomId} could not reserve a seat: ${reason}`);
 }
 
 /**
