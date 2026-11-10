@@ -3,6 +3,7 @@
 ## 0.18.10
 
 - `MatchMakeError.code` is now the server's `ErrorCode` even when the server sends standard HTTP statuses (`matchMaker.controller.standardHttpStatus` in `@colyseus/core` 0.18.28). A custom code like `ServerError(4000, …)` now reaches it too, where it used to be 500. [#999](https://github.com/colyseus/colyseus/issues/999)
+- In a document where browser storage is denied, like one sandboxed without `allow-same-origin`, creating a `Client` and signing in or out no longer cause an unhandled `SecurityError`. Signing in also no longer fails when browser storage is full. Thanks @henrymodisett! [#1002](https://github.com/colyseus/colyseus/issues/1002)
 
 ## 0.18.9
 

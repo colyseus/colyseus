@@ -38,11 +38,11 @@ function getStorage(): Storage {
 }
 
 export function setItem(key: string, value: string) {
-    getStorage().setItem(key, value);
+    bestEffort(() => getStorage().setItem(key, value));
 }
 
 export function removeItem(key: string) {
-    getStorage().removeItem(key);
+    bestEffort(() => getStorage().removeItem(key));
 }
 
 export function getItem(key: string, callback: Function) {
@@ -56,19 +56,34 @@ export function getItem(key: string, callback: Function) {
         callback(value);
 
     } else {
-        // react-native is asynchronous
-        value.then((id) => callback(id));
+        // IndexedDB: a failed read restores nothing, keeping a value assigned meanwhile
+        value.then((id) => callback(id), noop);
     }
 }
+
+/**
+ * Persisting is best-effort: storage that's denied (e.g. a sandboxed document
+ * without `allow-same-origin`) or full must not fail sign-in or sign-out,
+ * whether the backend throws or rejects.
+ */
+function bestEffort(write: () => unknown) {
+    try {
+        const pending = write();
+        if (pending instanceof Promise) { pending.catch(noop); }
+    } catch (e) {}
+}
+
+function noop() {}
 
 /**
  * When running in a Web Worker, we need to use IndexedDB to store data.
  */
 class IndexedDBStorage {
-    private dbPromise: Promise<IDBDatabase> = new Promise((resolve) => {
+    private dbPromise: Promise<IDBDatabase> = new Promise((resolve, reject) => {
         const request = indexedDB.open('_colyseus_storage', 1);
         request.onupgradeneeded = () => request.result.createObjectStore('store');
         request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
     });
 
     private async tx(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest) {
@@ -83,8 +98,9 @@ class IndexedDBStorage {
 
     async getItem(key: string) {
         const request = await this.tx('readonly', store => store.get(key));
-        return new Promise<string | undefined>((resolve) => {
+        return new Promise<string | undefined>((resolve, reject) => {
             request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
         });
     }
 
