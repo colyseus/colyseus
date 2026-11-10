@@ -31,6 +31,10 @@ export const debugAndPrintError = (e: Error | string) => {
 
   if (!(e instanceof ServerError)) {
     logger.error(message);
+
+  } else if (process.env.NODE_ENV !== 'production' && !debugError.enabled) {
+    // also thrown from room code (e.g. onJoin), where silence hides the bug
+    logger.warn(`ServerError ${e.code}: ${e.message}`);
   }
 
   debugError.call(debugError, message);
