@@ -108,6 +108,7 @@ describe('BunWebSockets', () => {
 
     await sdkRoom.leave();
     await server.gracefullyShutdown(false);
+    transport.simulateLatency(0); // it patches WebSocketClient.prototype.raw: restore it for the tests after
   });
 
   it('beforeUpgrade', async () => {
@@ -185,6 +186,44 @@ describe('BunWebSockets', () => {
     client.raw(data as any);
 
     clientWs.close();
+    server.stop();
+  });
+
+  it('leave() sends what a write window held before it closes', async () => {
+    const port = 8569;
+
+    let serverWs: any;
+    const server = Bun.serve({
+      port,
+      fetch(req, server) {
+        if (server.upgrade(req)) return;
+        return new Response("Not found", { status: 404 });
+      },
+      websocket: {
+        open(ws) { serverWs = ws; },
+        message() {},
+        close() {},
+      },
+    });
+
+    const clientWs = new WebSocket(`ws://127.0.0.1:${port}`);
+    clientWs.binaryType = 'arraybuffer';
+    const received: number[][] = [];
+    clientWs.onmessage = (e) => { received.push(Array.from(new Uint8Array(e.data))); };
+    const closedWith = new Promise<number>((resolve) => { clientWs.onclose = (e) => resolve(e.code); });
+    await new Promise<void>((resolve) => { clientWs.onopen = () => resolve(); });
+    await Bun.sleep(50);
+
+    const client = new WebSocketClient("test-session", Object.assign(new EventEmitter(), { ws: serverWs }) as any);
+    client.cork();
+    client.raw(new Uint8Array([1]));
+    client.raw(new Uint8Array([2, 2]));
+    client.leave(4000);
+    client.uncork(); // the window's own close: nothing left
+
+    assert.strictEqual(await closedWith, 4000);
+    assert.deepStrictEqual(received, [[1], [2, 2]]);
+
     server.stop();
   });
 });

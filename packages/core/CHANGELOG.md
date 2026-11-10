@@ -4,6 +4,8 @@
 
 - When `NODE_ENV` isn't `production`, a `ServerError` that refuses a join or a matchmaking request is now printed as a one-line warning, like `ServerError 520: provided room name "gameRoom" not defined`. Only `DEBUG=colyseus:errors` showed it, so an `onJoin()` that threw one refused every join without a trace in the log. Thanks @RoyallGuards!
 - A seat reservation that fails for any reason other than a full room no longer says `<roomId> is already full.`: it now says why, like `<roomId> could not reserve a seat: <reason>`. This includes `QueueRoom` groups. Thanks @kristenmontesano for the report and @JROtto5 for the fix! [#1001](https://github.com/colyseus/colyseus/pull/1001)
+- `room.autoBatchMessages = true` writes everything one tick of `setFixedTimestep()` / `setTimestep()` sends a client to its socket at once: the same messages in the same order, in one write instead of one per message. A tick that sends many messages (hits, projectiles, effects) costs a fraction of the server CPU it did. Off by default: a room that doesn't set it sends exactly as before.
+- `room.batchMessages(fn)` does the same for whatever `fn` sends, anywhere: a message handler, a timer, a callback.
 
 ## 0.18.27
 
