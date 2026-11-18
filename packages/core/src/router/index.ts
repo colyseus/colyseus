@@ -155,11 +155,10 @@ export function createRouter<
     openapi: { disabled: true },
     ...config,
     // Otherwise a malformed body is a 500 plus a stack trace on stderr: log
-    // noise any anonymous client can trigger at will. Matched on the message
-    // because `onError` receives no request context to test against.
-    onError: async (error: unknown) => (error instanceof SyntaxError && error.message.includes('JSON'))
+    // noise any anonymous client can trigger at will.
+    onError: async (error: unknown, request: Request) => (error instanceof SyntaxError && error.message.includes('JSON'))
       ? Response.json({ error: 'malformed request body' }, { status: 400 })
-      : await onError?.(error),
+      : await onError?.(error, request),
   });
 }
 

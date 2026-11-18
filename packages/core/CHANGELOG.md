@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.29
+
+- HTTP responses from your endpoints no longer hang when a large body, like a static file, goes to a slow client, and are no longer cut short when streamed in several chunks (`@colyseus/better-call` 1.3.4). Thanks @k-monkey! [#1003](https://github.com/colyseus/colyseus/issues/1003)
+- An `APIError`'s `cause` is no longer sent to the client, and values set by middleware no longer leak between concurrent requests when `createRouter()` is given a `routerContext`. An `onError` passed to `createRouter()` now also receives the `request`. A request body with malformed JSON still gets a 400, now with a `{ message, code }` body instead of `{ error }`.
+
 ## 0.18.28
 
 - Rooms that send many messages per tick (hits, projectiles, effects) can now spend far less server CPU sending them: set `this.autoBatchMessages = true`, and everything one `setFixedTimestep()` / `setTimestep()` tick sends to a client goes out in a single socket write, in the same order. To batch sends anywhere else, like a message handler or a timer, wrap them in `this.batchMessages(() => { … })`. It's off by default, and needs the matching transport release (e.g. `@colyseus/ws-transport` 0.18.5); with an older transport, messages still go out one at a time. [#995](https://github.com/colyseus/colyseus/pull/995)
