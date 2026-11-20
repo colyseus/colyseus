@@ -13,6 +13,10 @@ import('uwebsockets-express')
   .then((module) => uWebSocketsExpress.resolve(module))
   .catch((error) => uWebSocketsExpress.reject(error));
 
+// uwebsockets-express is an optional peer: without this, its absence is an unhandled rejection
+// that ends the process even when no express app is used. getExpressApp() still reports it.
+uWebSocketsExpress.catch(() => {});
+
 const noop = () => {};
 
 // uWS wants the status line before any header, and a synchronous cork callback
