@@ -10,7 +10,7 @@ importers:
     devDependencies:
       '@colyseus/schema':
         specifier: ^5.0.6
-        version: 5.0.8(typescript@6.0.3)
+        version: 5.0.51(typescript@6.0.3)
       '@types/debug':
         specifier: ^0.0.31
         version: 0.0.31
@@ -125,7 +125,7 @@ importers:
         version: link:../../packages/transport/h3-transport
       '@colyseus/schema':
         specifier: ^5.0.8
-        version: 5.0.8(typescript@6.0.3)
+        version: 5.0.51(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../../packages/sdk
@@ -444,7 +444,7 @@ importers:
         version: link:../presence/redis-presence
       '@colyseus/schema':
         specifier: ^5.0.8
-        version: 5.0.8(typescript@6.0.3)
+        version: 5.0.51(typescript@6.0.3)
       '@colyseus/tools':
         specifier: workspace:^
         version: link:../tools
@@ -574,7 +574,7 @@ importers:
         version: link:../presence/redis-presence
       '@colyseus/schema':
         specifier: ^5.0.8
-        version: 5.0.8(typescript@6.0.3)
+        version: 5.0.51(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -840,7 +840,7 @@ importers:
         version: link:../better-call/packages/better-call
       '@colyseus/schema':
         specifier: ^5.0.8
-        version: 5.0.8(typescript@6.0.3)
+        version: 5.0.51(typescript@6.0.3)
       '@colyseus/shared-types':
         specifier: workspace:^0.18.2
         version: link:../shared-types
@@ -937,7 +937,7 @@ importers:
         version: link:../../core
       '@colyseus/schema':
         specifier: ^5.0.6
-        version: 5.0.8(typescript@6.0.3)
+        version: 5.0.51(typescript@6.0.3)
 
   packages/shared-types:
     dependencies:
@@ -969,7 +969,7 @@ importers:
         version: link:../core
       '@colyseus/schema':
         specifier: ^5.0.8
-        version: 5.0.8(typescript@6.0.3)
+        version: 5.0.51(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -1056,7 +1056,7 @@ importers:
         version: link:../../core
       '@colyseus/schema':
         specifier: ^5.0.0
-        version: 5.0.8(typescript@6.0.3)
+        version: 5.0.51(typescript@6.0.3)
       '@fails-components/webtransport':
         specifier: ^1.6.2
         version: 1.6.2
@@ -1569,11 +1569,14 @@ packages:
   '@colyseus/clock@2.0.3':
     resolution: {integrity: sha512-kziqG0dcGsvSfcerHLZTY1V2PmGnZAdG5DM0T5BKQDAiYBXYoMqfzA1Wxfe3KSnyeZuP99isffkUQLEwpFYF7A==}
 
-  '@colyseus/schema@5.0.8':
-    resolution: {integrity: sha512-6IaQxn4jVVJC6qzQtPLquYE5yVNitAOGiI9Yp7/vpy4MJhGiUGe/ju29dPLZecfvKobc2v/KMTgyjzEYxvbDsg==}
+  '@colyseus/schema@5.0.51':
+    resolution: {integrity: sha512-Of5jEowOV/9nXhahqLr1ybb0JSHYxnYv4AF3lLATADej2z/+4GZujkImG+xPXoffED+62YNP71sYpjHiMo3teA==}
     hasBin: true
     peerDependencies:
-      typescript: ^5.0.0 || ^6.0.0
+      typescript: '>=5.0.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   '@colyseus/timer@2.0.3':
     resolution: {integrity: sha512-75MI7LfXQncibesa7W6FKWUc8YBcVI6jwBrDXOq1TlgYQXSMRv7a5WFPBdDKkP5Pht9IWpE2hyUb8B1DPrLYqg==}
@@ -10483,8 +10486,8 @@ snapshots:
 
   '@colyseus/clock@2.0.3': {}
 
-  '@colyseus/schema@5.0.8(typescript@6.0.3)':
-    dependencies:
+  '@colyseus/schema@5.0.51(typescript@6.0.3)':
+    optionalDependencies:
       typescript: 6.0.3
 
   '@colyseus/timer@2.0.3':

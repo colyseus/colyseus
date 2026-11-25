@@ -232,8 +232,9 @@ describe("@unreliable state channel", () => {
   //
   // The one hazard of splitting state across two channels: an entity's ADD
   // travels the reliable stream while its `@unreliable` fields travel
-  // datagrams, so a datagram can name a refId the client hasn't been told
-  // about. These pin what actually happens — measured, not assumed.
+  // datagrams, so a datagram could name a refId the client hasn't been told
+  // about. An instance's first `@unreliable` values ride its ADD to close that
+  // gap. These pin what actually happens — measured, not assumed.
   //
   describe("cross-channel ordering", () => {
     const Entity = schema({
@@ -311,7 +312,7 @@ describe("@unreliable state channel", () => {
       assert.strictEqual(decoded.entities.get("f").x, 50, "exact, every tick");
     });
 
-    it("a full state sync carries @unreliable values, but a mid-session ADD does not", () => {
+    it("a mid-session ADD carries @unreliable values, as a full state sync does", () => {
       const { serializer, state, client, decoded, decoder } = connected();
 
       const e = new Entity();
@@ -325,18 +326,10 @@ describe("@unreliable state channel", () => {
 
       const added = decoded.entities.get("a");
       assert.strictEqual(added.name, "alice", "reliable fields ride the ADD");
-      assert.strictEqual(added.x, undefined,
-        "@unreliable fields do NOT ride the ADD — they arrive only by datagram");
-
-      // A client joining now gets the value, because encodeAll includes it.
-      const lateState: any = new MapState();
-      const lateDecoder = new Decoder(lateState);
-      lateDecoder.decode(serializer.getFullState(fakeClient(true)).subarray(1));
-      assert.strictEqual(lateState.entities.get("a").x, 111,
-        "full state sync DOES carry it — this asymmetry is what opens the gap");
+      assert.strictEqual(added.x, 111, "so does the first @unreliable value");
     });
 
-    it("a datagram that overtakes its entity's ADD is skipped, not applied", () => {
+    it("a datagram that overtakes its entity's ADD carries nothing for it", () => {
       const { serializer, state, client, decoded, decoder } = connected();
 
       const e = new Entity();
@@ -348,15 +341,15 @@ describe("@unreliable state channel", () => {
       serializer.applyUnreliablePatches([client]);
 
       const { errors } = captureRefIdErrors(() => feedUnreliable(decoder, client));
-      assert.strictEqual(errors, 1, "one report for the unknown refId");
+      assert.strictEqual(errors, 0, "nothing written against the unknown refId");
 
       feedReliable(decoder, client);
       const got = decoded.entities.get("c");
-      assert.strictEqual(got.name, "carol", "the entity itself is intact");
-      assert.strictEqual(got.x, undefined, "that tick's value was dropped with the frame");
+      assert.strictEqual(got.name, "carol");
+      assert.strictEqual(got.x, 333, "the value arrived with the ADD");
     });
 
-    it("a faster unreliable cadence costs one report per flush before the ADD ships", () => {
+    it("a faster unreliable cadence sends nothing for an entity before its ADD ships", () => {
       const { serializer, state, client, decoded, decoder } = connected();
 
       const e = new Entity();
@@ -371,15 +364,13 @@ describe("@unreliable state channel", () => {
           feedUnreliable(decoder, client);
         }
       });
-      assert.strictEqual(errors, 10, "systematic, not a rare race");
+      assert.strictEqual(errors, 0);
 
       serializer.applyPatches([client]);
       feedReliable(decoder, client);
-      assert.strictEqual(decoded.entities.get("d").x, undefined,
-        "the value is still missing once the ADD lands — the ADD doesn't carry it");
+      assert.strictEqual(decoded.entities.get("d").x, 10, "the ADD carries the latest value");
 
-      // It self-heals on the next mutation, which for a per-tick field is
-      // one unreliable tick later.
+      // Later mutations go back to the datagram channel.
       e.x = 999;
       serializer.applyUnreliablePatches([client]);
       feedUnreliable(decoder, client);
