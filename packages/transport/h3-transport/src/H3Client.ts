@@ -56,6 +56,11 @@ export class FrameReassembler {
         throw e;
       }
 
+      // negated: undefined/NaN fail too; a negative length would rewind the cursor forever
+      if (!(length >= 0)) {
+        throw new Error(`@colyseus/h3-transport: invalid frame length (${length})`);
+      }
+
       const frameEnd = it.offset + length;
       if (frameEnd > bytes.byteLength) {
         // payload is incomplete — wait for more bytes
@@ -241,7 +246,15 @@ export class H3Client implements Client, ClientPrivate {
       // each message is prefixed with its length
       // a read may also deliver a partial frame; buffer across reads
       //
-      for (const frame of reassembler.push(read.value)) {
+      let frames: Uint8Array[];
+      try {
+        frames = reassembler.push(read.value);
+      } catch (e) {
+        this._onChannelFailure(channel, e);
+        return;
+      }
+
+      for (const frame of frames) {
         this.ref.emit('message', frame);
       }
     }

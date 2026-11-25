@@ -25,6 +25,7 @@ function controllableStream() {
   return {
     stream,
     push: (payload: Uint8Array) => controller.enqueue(frame(payload)),
+    raw: (bytes: Uint8Array) => controller.enqueue(bytes),
     fail: (reason: any) => controller.error(reason),
     end: () => controller.close(),
   };
@@ -133,6 +134,19 @@ describe("Transport: H3 read loops", () => {
     assert.strictEqual(errorCloses().length, 1);
     assert.strictEqual(warnings.length, 1);
     assert.match(warnings[0], /its unreliable channel/);
+  });
+
+  it("drops the client on a malformed frame length", async () => {
+    const { client, datagrams, dropped, closes, errorCloses } = await connected();
+
+    datagrams.raw(new Uint8Array([0xff])); // length prefix of -1
+    await dropped;
+
+    assert.strictEqual(client.readyState, 3);
+    assert.strictEqual(closes(), 1);
+    assert.strictEqual(errorCloses().length, 1);
+    assert.strictEqual(warnings.length, 1);
+    assert.match(warnings[0], /invalid frame length/);
   });
 
   it("reports a rejection that carries no message", async () => {
