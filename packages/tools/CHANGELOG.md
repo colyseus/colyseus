@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.12
+
+- On Colyseus Cloud, changing the `script` of your ecosystem config now takes effect on the next deploy. Servers used to keep starting the old file, or fail once your build stopped producing it. A server that can't switch without a restart fails the deploy and asks you to reboot it from the dashboard; the previous version keeps serving until then.
+- A deploy whose `script` doesn't exist now fails right away, and the previous version keeps serving.
+
 ## 0.18.11
 
 - On Colyseus Cloud, deploys now restart the deploy agent if it has stopped, e.g. after a reboot that failed to start the app. Without it, every deploy cut players off instead of letting their games finish.
