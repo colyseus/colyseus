@@ -34,11 +34,12 @@ const TEST_RUNTIME_ENV_PATH = path.join(TEST_DIR, 'test_runtime_env.json');
 const TOOLS_PACKAGE_PATH = path.resolve(__dirname, '..');
 
 const PM2_APP_NAME = 'my-app';
+const WORKER_APP_NAME = 'my-worker';
 
 /**
  * Update ecosystem config with specified number of instances
  */
-function updateEcosystemConfig(instances: number, { killTimeout = 2000, listenTimeout = 0, maxMemoryRestart = '', env = {} as Record<string, string> } = {}): void {
+function updateEcosystemConfig(instances: number, { script = './dummy-server.cjs', worker = '', killTimeout = 2000, listenTimeout = 0, maxMemoryRestart = '', env = {} as Record<string, string> } = {}): void {
   env = { UNIX_SOCK_PATH: `${TEST_SOCK_DIR}/`, ...env };
   const configContent = `/**
  * Ecosystem config for testing PM2 deployment with specific instance count.
@@ -47,11 +48,11 @@ function updateEcosystemConfig(instances: number, { killTimeout = 2000, listenTi
 module.exports = {
   apps: [{
     name: '${PM2_APP_NAME}',
-    script: './dummy-server.cjs',
+    script: '${script}',
     instances: ${instances},
     kill_timeout: ${killTimeout},${listenTimeout ? `\n    listen_timeout: ${listenTimeout},` : ''}${maxMemoryRestart ? `\n    max_memory_restart: '${maxMemoryRestart}',` : ''}
     env: ${JSON.stringify(env)},
-  }]
+  }${worker ? `, {\n    name: '${WORKER_APP_NAME}',\n    script: '${worker}',\n  }` : ''}]
 };
 `;
   fs.writeFileSync(ECOSYSTEM_CONFIG_PATH, configContent);
@@ -776,6 +777,118 @@ describe('PM2 Deployment', function () {
       fs.rmSync(NEVER_LISTEN_FILE);
       await triggerPostDeploy(TEST_DIR, ECOSYSTEM_CONFIG_PATH);
       await waitFor(() => converged(EXPECTED_INSTANCES), 30000, describePool);
+    });
+  });
+
+  // PM2 clones and restarts from the script path it stored, so an app pointed
+  // at another repository kept starting the old repository's entry file
+  describe('Script change', function () {
+    const NEXT_SCRIPT = path.join(TEST_DIR, '.dummy-server-next.cjs');
+
+    beforeEach(async function () {
+      await cleanup();
+      updateEcosystemConfig(EXPECTED_INSTANCES);
+      await triggerPostDeploy(TEST_DIR, ECOSYSTEM_CONFIG_PATH);
+      await waitFor(() => converged(EXPECTED_INSTANCES), 30000, describePool);
+      await waitForSettled();
+    });
+
+    afterEach(function () {
+      fs.rmSync(NEXT_SCRIPT, { force: true });
+    });
+
+    after(async function () {
+      await cleanup();
+      updateEcosystemConfig(EXPECTED_INSTANCES);
+    });
+
+    async function execPaths(): Promise<string[]> {
+      return (await listApps())
+        .filter((app) => app.pm2_env?.status === 'online')
+        .map((app) => (app.pm2_env as any).pm_exec_path);
+    }
+
+    it('should roll out the new script without a gap, even once the old file is gone', async function () {
+      fs.copyFileSync(path.join(TEST_DIR, 'dummy-server.cjs'), NEXT_SCRIPT);
+      updateEcosystemConfig(EXPECTED_INSTANCES, { script: './.dummy-server-next.cjs' });
+
+      // the old file is unloadable from here on, as after a repository switch
+      const oldScript = path.join(TEST_DIR, 'dummy-server.cjs');
+      const original = fs.readFileSync(oldScript);
+      fs.writeFileSync(oldScript, 'throw new Error("old script started");');
+
+      try {
+        const deploy = triggerPostDeploy(TEST_DIR, ECOSYSTEM_CONFIG_PATH);
+        const dark = await longestDarkStretch(deploy.then(() => waitFor(() => converged(EXPECTED_INSTANCES), 30000, describePool)));
+        await deploy;
+
+        assert.deepStrictEqual(await execPaths(), Array(EXPECTED_INSTANCES).fill(NEXT_SCRIPT), await describePool());
+        assert.ok(dark < 1000, `no worker routable for ${dark}ms`);
+
+      } finally {
+        fs.writeFileSync(oldScript, original);
+      }
+    });
+
+    it('should refuse a script that does not exist, and keep the previous version serving', async function () {
+      const serving = await execPaths();
+      const upstreams = nginxUpstreamPorts();
+
+      updateEcosystemConfig(EXPECTED_INSTANCES, { script: './dist/missing.js' });
+      await assert.rejects(triggerPostDeploy(TEST_DIR, ECOSYSTEM_CONFIG_PATH), /Script not found: \.\/dist\/missing\.js/);
+
+      assert.deepStrictEqual(await execPaths(), serving);
+      assert.deepStrictEqual(nginxUpstreamPorts(), upstreams);
+    });
+
+    it('should apply the new script through the legacy script too', async function () {
+      await uninstallPostDeployAgent();
+      try {
+        fs.copyFileSync(path.join(TEST_DIR, 'dummy-server.cjs'), NEXT_SCRIPT);
+        updateEcosystemConfig(EXPECTED_INSTANCES, { script: './.dummy-server-next.cjs' });
+
+        const output = await runPostDeployScript(TEST_DIR);
+        assert.match(output, /legacy/, output);
+
+        await waitForApps(EXPECTED_INSTANCES);
+        assert.deepStrictEqual(await execPaths(), Array(EXPECTED_INSTANCES).fill(NEXT_SCRIPT), await describePool());
+
+      } finally {
+        // the legacy script's restart kills the daemon: reconnect, as the suite's agent went with it
+        await new Promise<void>((resolve, reject) => pm2.connect((err) => err ? reject(err) : resolve()));
+        await installPostDeployAgent();
+      }
+    });
+
+    it('should keep reloading a multi-app ecosystem through the legacy script', async function () {
+      const workerScript = path.join(TEST_DIR, '.dummy-worker.cjs');
+      const daemonPid = () => fs.readFileSync(require('pm2/constants').PM2_PID_FILE_PATH, 'utf8');
+      const workerOnline = () => new Promise<boolean>((resolve) =>
+        pm2.describe(WORKER_APP_NAME, (err, procs) => resolve(procs?.[0]?.pm2_env?.status === 'online')));
+
+      fs.writeFileSync(workerScript, 'setInterval(() => {}, 1 << 30);');
+      await uninstallPostDeployAgent();
+      const daemon = daemonPid();
+      try {
+        updateEcosystemConfig(EXPECTED_INSTANCES, { worker: './.dummy-worker.cjs' });
+        await runPostDeployScript(TEST_DIR);
+        await waitFor(workerOnline, 15000, describePool);
+        await waitForSettled();
+
+        // the worker's script isn't the first app's: a restart here would kill the daemon on every deploy
+        const output = await runPostDeployScript(TEST_DIR);
+        assert.match(output, /legacy/, output);
+        await waitForApps(EXPECTED_INSTANCES);
+        assert.strictEqual(daemonPid(), daemon, output);
+
+      } finally {
+        if (daemonPid() !== daemon) {
+          await new Promise<void>((resolve, reject) => pm2.connect((err) => err ? reject(err) : resolve()));
+        }
+        await new Promise<void>((resolve) => pm2.delete(WORKER_APP_NAME, () => resolve()));
+        fs.rmSync(workerScript, { force: true });
+        await installPostDeployAgent();
+      }
     });
   });
 

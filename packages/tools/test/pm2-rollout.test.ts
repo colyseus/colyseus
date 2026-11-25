@@ -14,7 +14,7 @@
  */
 import assert from 'assert';
 
-const { planRollout, planDrain, planReclaim, planOvershoot, planSurplus, newProcesses, readiness, socketPort, OVERSHOOT_MARGIN_MB } = require('../pm2/rollout.cjs');
+const { planRollout, planDrain, planReclaim, planOvershoot, planSurplus, newProcesses, readiness, socketPort, planScriptChange, OVERSHOOT_MARGIN_MB } = require('../pm2/rollout.cjs');
 const { peakProcesses, hasSettledSocket, isStopped } = require('../pm2/shared.cjs');
 
 type Proc = { pm_id: number; NODE_APP_INSTANCE: number; status: string };
@@ -368,6 +368,38 @@ describe('rolling deploy', () => {
     // PM2 passes through 'stopped' between a crash and the autorestart
     it('should not read a stop between restarts as final', () => {
       assert.deepStrictEqual(look({ status: 'stopped', starts: 2 }), { state: 'pending' });
+    });
+  });
+
+  // A customer who pointed their app at another repository kept starting the
+  // old repository's build/src/index.js: PM2 clones and restarts from the path
+  // it stored, and the new ecosystem said dist/server/server.mjs.
+  describe('script change', () => {
+    const OLD = '/home/deploy/source/build/src/index.js';
+    const NEW = '/home/deploy/source/dist/server/server.mjs';
+
+    it('should do nothing while every process runs the script', () => {
+      assert.strictEqual(planScriptChange({ execPaths: [NEW, NEW], script: NEW }), null);
+      assert.strictEqual(planScriptChange({ execPaths: [], script: NEW }), null);
+    });
+
+    it('should point the pool at a new file node runs too', () => {
+      assert.strictEqual(planScriptChange({ execPaths: [OLD], script: NEW }), 'update');
+      assert.strictEqual(planScriptChange({ execPaths: [OLD], script: '/home/deploy/source/index.cjs' }), 'update');
+    });
+
+    // a pool half pointed already (a deploy that stopped midway) still needs the rest
+    it('should catch a pool where only some processes run the old file', () => {
+      assert.strictEqual(planScriptChange({ execPaths: [NEW, OLD], script: NEW }), 'update');
+    });
+
+    it('should start afresh when the interpreter PM2 picks from the extension changes', () => {
+      assert.strictEqual(planScriptChange({ execPaths: [OLD], script: '/home/deploy/source/src/index.ts' }), 'restart');
+      assert.strictEqual(planScriptChange({ execPaths: ['/home/deploy/source/start.sh'], script: NEW }), 'restart');
+    });
+
+    it('should update in place when the ecosystem pins the interpreter', () => {
+      assert.strictEqual(planScriptChange({ execPaths: [OLD], script: '/home/deploy/source/src/index.ts', interpreter: 'bun' }), 'update');
     });
   });
 

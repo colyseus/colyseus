@@ -162,9 +162,10 @@ async function postDeploy() {
     } else {
 
       //
-      // detect if cwd has changed, and restart PM2 if it has
+      // detect if cwd or script has changed, and restart PM2 if it has
+      // (a reload keeps running the script each process started with)
       //
-      if (apps[0].pm2_env.pm_cwd !== pm2.cwd) {
+      if (apps[0].pm2_env.pm_cwd !== pm2.cwd || scriptChanged(apps)) {
         //
         // remove all and start again with new cwd
         //
@@ -178,6 +179,16 @@ async function postDeploy() {
       }
     }
   });
+}
+
+/** Whether the ecosystem's `script` is an existing file the pool doesn't run. */
+function scriptChanged(apps) {
+  const [first, ...rest] = cloudEnv.requireEcosystem(CONFIG_FILE_PATH).apps || [];
+  if (typeof first?.script !== 'string') { return false; }
+
+  const others = new Set(rest.map((app) => app.name).filter(Boolean)); // they run their own script
+  const file = path.resolve(pm2.cwd, first.script);
+  return fs.existsSync(file) && apps.some((app) => !others.has(app.name) && app.pm2_env.pm_exec_path !== file);
 }
 
 function onAppRunning(reloadedAppIds) {

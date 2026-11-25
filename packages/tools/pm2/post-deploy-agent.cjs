@@ -78,6 +78,16 @@ const WAITING_MESSAGE = "Post-deploy success. This server has no room for more p
   "until a draining one exits: this version goes live then, and players keep " +
   "being served meanwhile.";
 
+// The Cloud panel knows both: it fails the deploy without retrying
+const SCRIPT_NEEDS_REBOOT_MESSAGE = "Post-deploy failed. The \"script\" of your ecosystem config " +
+  "changed, and this server has to restart to switch to it: reboot it from the dashboard. " +
+  "The previous version keeps serving until then.";
+
+function scriptNotFoundMessage(script) {
+  return `Post-deploy failed. Script not found: ${script} (the "script" of your ecosystem config). ` +
+    "The previous version keeps serving.";
+}
+
 /**
  * Rollouts take turns. Two at once plan against the same pool: both pick the
  * same old processes to restart and stop, which can orphan one on its socket,
@@ -123,7 +133,7 @@ function postDeploy(config, reply, done, ticket) {
 
   appConfig = config;
 
-  shared.listApps(function(err, apps) {
+  shared.listApps(async function(err, apps) {
     if (err) {
       console.error(err);
       done();
@@ -158,6 +168,30 @@ function postDeploy(config, reply, done, ticket) {
           if (!err) { reconcileAndSave(config); }
         });
       });
+    }
+
+    const script = scriptFile(config);
+
+    if (script && !fs.existsSync(script)) {
+      done();
+      return reply({ success: false, message: scriptNotFoundMessage(config.script) });
+    }
+
+    const scriptChange = script && rollout.planScriptChange({
+      execPaths: apps.map((app) => app.pm2_env.pm_exec_path),
+      script,
+      interpreter: config.interpreter,
+    });
+
+    if (scriptChange) {
+      console.log(`"script" changed to ${config.script}`);
+    }
+
+    // Not deleted and started again: new players would get nothing until every
+    // room on the old processes closed. A reboot starts afresh, and patches PM2.
+    if (scriptChange === 'restart' || (scriptChange === 'update' && !(await pointAt(apps, script)))) {
+      done();
+      return reply({ success: false, message: SCRIPT_NEEDS_REBOOT_MESSAGE });
     }
 
     /**
@@ -646,6 +680,32 @@ function withCurrentConfig(pm_id, config) {
     logIfError(err);
     resolve();
   }, shared.LIFECYCLE_KEYS));
+}
+
+/**
+ * The file the ecosystem's `script` names, the way PM2 resolves it. Undefined
+ * for a command on PATH (`npm`), which a repository change doesn't move.
+ */
+function scriptFile(config) {
+  if (typeof config.script !== 'string') { return undefined; }
+
+  const file = path.resolve(config.cwd, config.script);
+  return (fs.existsSync(file) || !shared.isCommandOnPath(config.script)) ? file : undefined;
+}
+
+/**
+ * Point every process at `script` before the rollout clones or restarts any
+ * (see planScriptChange). False when this server's PM2 daemon predates the
+ * patch that allows it.
+ */
+async function pointAt(apps, script) {
+  const errors = await Promise.all(apps.map((app) => new Promise((resolve) =>
+    shared.updateExecPath(app.pm2_env.pm_id, script, resolve))));
+
+  if (errors.some(shared.isUnpatchedDaemon)) { return false; }
+
+  errors.forEach(logIfError);
+  return true;
 }
 
 function logIfError (err) {

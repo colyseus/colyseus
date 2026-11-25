@@ -5,6 +5,7 @@
  * without a live daemon — the agent only executes what these functions decide.
  */
 const cst = require('pm2/constants');
+const path = require('path');
 const { spawnCount, peakProcesses } = require('./shared.cjs');
 
 const BASE_PORT = 2567;
@@ -183,6 +184,41 @@ function planReclaim({ apps, instances }) {
     .slice(0, overBy);
 }
 
+/**
+ * What to do when the ecosystem's `script` is no longer the file the pool runs:
+ * another repository, or a build that now writes elsewhere.
+ *
+ * PM2 starts a clone or a restart from the `pm_exec_path` it stored at the
+ * process's first start, so a rolling deploy would keep starting the old file
+ * -- or crash on it, once the build no longer writes it.
+ *
+ * - `null`: every process already runs `script`.
+ * - `'update'`: point the processes at it, and roll out as usual.
+ * - `'restart'`: delete and start again, like a Root Directory change. PM2
+ *   picks the interpreter from the extension at first start (`.ts` runs under
+ *   bun or with type stripping), so only a change within one interpreter can
+ *   be applied in place. An ecosystem `interpreter` pins it for every path.
+ *
+ * @param {object}   opts
+ * @param {string[]} opts.execPaths    `pm_exec_path` of each process in the pool
+ * @param {string}   opts.script       absolute path of the ecosystem's `script`
+ * @param {string}   [opts.interpreter] the ecosystem's `interpreter`
+ * @returns {null | 'update' | 'restart'}
+ */
+function planScriptChange({ execPaths, script, interpreter }) {
+  const stale = execPaths.filter((execPath) => execPath !== script);
+  if (stale.length === 0) { return null; }
+
+  const sameInterpreter = interpreter || stale.every((execPath) => interpreterOf(execPath) === interpreterOf(script));
+  return sameInterpreter ? 'update' : 'restart';
+}
+
+// PM2 maps `.js` to node and runs unmapped extensions (`.mjs`, `.cjs`) with its own node
+function interpreterOf(file) {
+  const ext = path.extname(file);
+  return ['.js', '.mjs', '.cjs'].includes(ext) ? 'node' : ext;
+}
+
 module.exports = {
   OVERSHOOT_MARGIN_MB,
   socketPort,
@@ -193,4 +229,5 @@ module.exports = {
   planDrain,
   readiness,
   planReclaim,
+  planScriptChange,
 };

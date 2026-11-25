@@ -2,6 +2,7 @@ const pm2 = require('pm2');
 const cst = require('pm2/constants');
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const v8 = require('v8');
 const cloudEnv = require('./cloud-env.cjs');
 
@@ -224,6 +225,38 @@ function updateProcessConfig(pm_id, config, cb, keys = CONFIG_KEYS) {
   pm2.Client.executeRemote('updateProcessConfig', opts, cb);
 }
 
+/**
+ * Point a process at another script: PM2 starts its next restart, and every
+ * clone `pm2.scale` makes of it, from this path. The running process is left
+ * alone. Sent as is: updateProcessConfig's unit conversion reads the `s` of
+ * "index.js" as seconds.
+ */
+function updateExecPath(pm_id, execPath, cb) {
+  pm2.Client.executeRemote('updateProcessConfig', { id: pm_id, env: { pm_exec_path: execPath } }, cb);
+}
+
+/** The error a daemon started before `colyseus-system-boot` patched PM2 answers updateProcessConfig with. */
+function isUnpatchedDaemon(err) {
+  return /does not exist/.test(String(err?.message ?? err));
+}
+
+/**
+ * Whether `script` names a command on PATH (`npm`, `bun`), which PM2 runs when
+ * no such file exists in the app's directory.
+ */
+function isCommandOnPath(script) {
+  if (script.includes('/')) { return false; }
+
+  return (process.env.PATH || '').split(path.delimiter).filter(Boolean).some((dir) => {
+    try {
+      fs.accessSync(path.join(dir, script), fs.constants.X_OK);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  });
+}
+
 module.exports = {
   /**
    * Constants
@@ -246,6 +279,9 @@ module.exports = {
   peakProcesses,
 
   updateProcessConfig,
+  updateExecPath,
+  isUnpatchedDaemon,
+  isCommandOnPath,
   LIFECYCLE_KEYS,
 
   /** Processes NGINX may route to. Includes `launching` — the socket is coming. */
