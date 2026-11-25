@@ -25,8 +25,16 @@ const _inputReflectionCache = new WeakMap<Function, Uint8Array>();
  * Rebuild one `k`-length series of the unreliable stamp block: `newest` is the
  * absolute anchor, and each wire delta walks one slot older
  * (`out[i] = out[i+1] − Δ`). Mirrors the SDK's `_writeSeriesDeltas`.
+ *
+ * Throws on a `k` the packet can't hold: `k` comes from the client, and each
+ * delta takes at least one byte.
+ *
+ * @internal
  */
-function readSeriesDeltas(buffer: Buffer, it: Iterator, k: number, newest: number): number[] {
+export function readSeriesDeltas(buffer: Buffer, it: Iterator, k: number, newest: number): number[] {
+  if (!(k >= 1 && k - 1 <= buffer.length - it.offset)) { // negated: undefined/NaN fail too
+    throw new RangeError(`@colyseus/core: unreliable input stamp block declared an invalid slot count (${k})`);
+  }
   const out = new Array<number>(k);
   out[k - 1] = newest;
   for (let i = k - 2; i >= 0; i--) {

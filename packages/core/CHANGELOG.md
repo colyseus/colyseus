@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.30
+
+- Hardened how room input is decoded. Update `@colyseus/schema` to 5.0.51 or later as well. Thanks @NissanBoss!
+
 ## 0.18.29
 
 - HTTP responses from your endpoints no longer hang when a large body, like a static file, goes to a slow client, and are no longer cut short when streamed in several chunks (`@colyseus/better-call` 1.3.4). Thanks @k-monkey! [#1003](https://github.com/colyseus/colyseus/issues/1003)
