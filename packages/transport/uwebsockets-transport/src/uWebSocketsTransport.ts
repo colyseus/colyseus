@@ -331,8 +331,13 @@ export class uWebSocketsTransport extends Transport {
         // (fixes: "uWS.HttpResponse must not be accessed after onAborted callback")
         abortController.signal.addEventListener('abort', () => {
           eres.finished = true;
-          // @ts-ignore
-          eres.writableEnded = true;
+
+          // uwebsockets-express@1.x owns a writable flag here.
+          // uwebsockets-express@2.x inherits Node's read-only getter.
+          const writableEnded = Object.getOwnPropertyDescriptor(eres, 'writableEnded');
+          if (writableEnded?.writable) {
+            (eres as unknown as { writableEnded: boolean }).writableEnded = true;
+          }
         });
 
         // Apply CORS headers through the Express response wrapper
