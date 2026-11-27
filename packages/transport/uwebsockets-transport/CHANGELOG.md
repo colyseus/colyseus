@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.6
+
+- Hardened handling of aborted Express requests. Thanks @OWENLEEzy! [#1005](https://github.com/colyseus/colyseus/issues/1005)
+
 ## 0.18.5
 
 - Supports `room.autoBatchMessages` and `room.batchMessages()` from `@colyseus/core` 0.18.28, which send a tick's messages to each client in one write instead of one per message. Nothing changes with an older `@colyseus/core`. [#995](https://github.com/colyseus/colyseus/pull/995)

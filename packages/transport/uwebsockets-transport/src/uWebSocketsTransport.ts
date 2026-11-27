@@ -15,6 +15,9 @@ import('uwebsockets-express')
 
 const noop = () => {};
 
+// stands in for an aborted uWS response: cork() never runs its callback
+const abortedResponse = { cork: noop };
+
 // uWS wants the status line before any header, and a synchronous cork callback
 function writeResponse(res: uWebSockets.HttpResponse, response: Response, body: ArrayBuffer) {
   res.cork(() => {
@@ -242,8 +245,8 @@ export class uWebSocketsTransport extends Transport {
       const abortController = new AbortController();
 
       res.onAborted(() => {
-        abortController.abort();
         res.aborted = true;
+        abortController.abort();
       });
 
       // cache all headers and request info synchronously
@@ -325,14 +328,11 @@ export class uWebSocketsTransport extends Transport {
         });
         const eres = new uWebSocketsExpressModule.ServerResponse(res, req, this._expressApp);
 
-        // Propagate uWS abort to the Express response wrapper.
-        // When the client disconnects, mark the wrapper as finished
-        // so it won't try to write to the already-aborted uWS response.
-        // (fixes: "uWS.HttpResponse must not be accessed after onAborted callback")
+        // a late response must not touch the aborted uWS response
         abortController.signal.addEventListener('abort', () => {
-          eres.finished = true;
-          // @ts-ignore
-          eres.writableEnded = true;
+          eres.finished = true; // end() bails on it
+          if (!eres.writableEnded) { (eres as any).writableEnded = true; } // own field in 1.x, getter over `finished` in 2.x
+          (eres as any).res = abortedResponse; // the wrapper only writes inside res.cork()
         });
 
         // Apply CORS headers through the Express response wrapper

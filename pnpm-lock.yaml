@@ -1076,9 +1076,15 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../../core
+      '@colyseus/sdk':
+        specifier: workspace:^
+        version: link:../../sdk
       uwebsockets-express:
         specifier: ^2.0.1
         version: 2.0.2(@types/express@5.0.6)
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@25.6.0)(lightningcss@1.33.0)
 
   packages/transport/ws-transport:
     dependencies:
