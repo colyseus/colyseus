@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.23
+
+- Hardened handling of aborted Express requests. Thanks @OWENLEEzy! [#1005](https://github.com/colyseus/colyseus/issues/1005)
+
 ## 0.17.22
 
 - Runs on Debian 12 again, and on any other system with glibc older than 2.38. Since 0.17.7, fresh installs there crashed at startup with ``version `GLIBC_2.38' not found``. uWebSockets.js is pinned to v20.52.0, which covers Node.js 20, 22 and 24; Node.js 25 (end-of-life) is no longer supported.
